@@ -1,6 +1,7 @@
 import {
     AmbientLight,
     BoxGeometry,
+    Clock,
     DoubleSide,
     Mesh,
     MeshBasicMaterial,
@@ -11,6 +12,17 @@ import {
     WebGLRenderer
 } from "three";
 import Stats from "three/examples/jsm/libs/stats.module.js";
+import {oimo} from "oimophysics/OimoPhysics";
+
+const World = oimo.dynamics.World;
+const Shape = oimo.dynamics.rigidbody.Shape;
+const ShapeConfig = oimo.dynamics.rigidbody.ShapeConfig;
+const RigidBodyConfig = oimo.dynamics.rigidbody.RigidBodyConfig;
+const RigidBody = oimo.dynamics.rigidbody.RigidBody;
+const RigidBodyType = oimo.dynamics.rigidbody.RigidBodyType;
+const Vec3 = oimo.common.Vec3;
+const OBoxGeometry = oimo.collision.geometry.BoxGeometry;
+const OSphereGeometry = oimo.collision.geometry.SphereGeometry;
 
 const container = document.getElementById('container');
 const scene = new Scene();
@@ -26,8 +38,12 @@ container.appendChild(renderer.domElement);
 const stats = new Stats();
 container.appendChild(stats.dom);
 
-scene.add(createBall());
-scene.add(createFloor());
+const world = new World();
+const clock = new Clock();
+
+let bodies = new WeakMap();
+createBall();
+createFloor();
 
 window.addEventListener('resize', function () {
     camera.aspect = window.innerWidth / window.innerHeight;
@@ -37,14 +53,18 @@ window.addEventListener('resize', function () {
 });
 
 function createBall() {
-    const sphere = new SphereGeometry(0.5);
+    const r = 0.5;
+    const sphere = new SphereGeometry(r);
     const material = new MeshStandardMaterial({
         color: 0x7571ad,
         roughness: 0.0,
         metalness: 0.5,
         side: DoubleSide
     });
-    return new Mesh(sphere, material);
+    const mesh = new Mesh(sphere, material);
+    const geometry = new OSphereGeometry(r);
+    scene.add(mesh);
+    applyBody(mesh, geometry, RigidBodyType.DYNAMIC);
 }
 
 function createFloor() {
@@ -54,11 +74,48 @@ function createFloor() {
     });
     const mesh = new Mesh(box, material);
     mesh.position.y = -5;
-    return mesh;
+    const params = mesh.geometry.parameters;
+    const geometry = new OBoxGeometry(
+        new Vec3(
+            params.width / 2,
+            params.height / 2,
+            params.depth / 2
+        )
+    );
+    scene.add(mesh);
+    applyBody(mesh, geometry, RigidBodyType.STATIC);
+}
+
+function applyBody(mesh, geometry, type) {
+    const shapeConfig = new ShapeConfig();
+    shapeConfig.geometry = geometry;
+    shapeConfig.restitution = 0.8;
+    const bodyConfig = new RigidBodyConfig();
+    bodyConfig.type = type;
+    bodyConfig.position = new Vec3(
+        mesh.position.x,
+        mesh.position.y,
+        mesh.position.z
+    );
+    const body = new RigidBody(bodyConfig);
+    body.addShape(new Shape(shapeConfig));
+    world.addRigidBody(body);
+    bodies.set(mesh, body);
 }
 
 function animate() {
     requestAnimationFrame(animate);
+    const delta = clock.getDelta();
+    if (delta > 0) {
+        world.step(delta);
+        for (const child of scene.children) {
+            const body = bodies.get(child);
+            if (body) {
+                child.position.copy(body.getPosition());
+                child.quaternion.copy(body.getOrientation());
+            }
+        }
+    }
     renderer.render(scene, camera);
     stats.update();
 }
