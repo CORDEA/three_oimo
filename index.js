@@ -13,6 +13,7 @@ import {
 } from "three";
 import Stats from "three/examples/jsm/libs/stats.module.js";
 import {oimo} from "oimophysics/OimoPhysics";
+import {ThreeDebugDraw} from "./debugdraw";
 
 const World = oimo.dynamics.World;
 const Shape = oimo.dynamics.rigidbody.Shape;
@@ -27,7 +28,7 @@ const OSphereGeometry = oimo.collision.geometry.SphereGeometry;
 const container = document.getElementById('container');
 const scene = new Scene();
 const camera = new PerspectiveCamera(50, window.innerWidth / window.innerHeight);
-camera.position.set(0, -1, 10);
+camera.position.set(0, -2, 12);
 scene.add(new AmbientLight(0xffffff));
 
 const renderer = new WebGLRenderer({antialias: true});
@@ -39,6 +40,10 @@ const stats = new Stats();
 container.appendChild(stats.dom);
 
 const world = new World();
+const debugdraw = new ThreeDebugDraw(scene);
+debugdraw.drawAabbs = true;
+debugdraw.wireframe = true;
+world.setDebugDraw(debugdraw);
 const clock = new Clock();
 
 let bodies = new WeakMap();
@@ -57,6 +62,8 @@ function createBall() {
     const sphere = new SphereGeometry(r);
     const material = new MeshStandardMaterial({
         color: 0x7571ad,
+        transparent: true,
+        opacity: 0.0,
         roughness: 0.0,
         metalness: 0.5,
         side: DoubleSide
@@ -70,7 +77,9 @@ function createBall() {
 function createFloor() {
     const box = new BoxGeometry(10, 1, 10);
     const material = new MeshBasicMaterial({
-        color: 0x9c9c9c
+        color: 0x9c9c9c,
+        transparent: true,
+        opacity: 0.0
     });
     const mesh = new Mesh(box, material);
     mesh.position.y = -5;
@@ -115,6 +124,8 @@ function animate() {
                 child.quaternion.copy(body.getOrientation());
             }
         }
+        world.debugDraw();
+        debugdraw.render();
     }
     renderer.render(scene, camera);
     stats.update();
